@@ -1,0 +1,114 @@
+# Memory Management Lab Commands
+# Run these commands in sequence in the lab directory (/home/munireddy/Desktop/Murali/OS-U3-BANANA-main)
+# Prerequisites: sudo apt update && sudo apt install -y gcc build-essential linux-tools-common linux-tools-$(uname -r) sysstat strace
+
+# Section 0: Get Your Bearings
+free -m
+# Displays total RAM and swap in MB, showing baseline memory.
+
+getconf PAGESIZE
+# Shows the system's page size in bytes (typically 4096).
+
+awk '/MemTotal/ {print $2 / 4}' /proc/meminfo
+# Calculates the number of physical page frames by dividing total memory (in KB) by page size (4 KB).
+
+# Section 1: The Virtual Address Space
+gcc -o layout layout.c -no-pie
+# Compiles layout.c without Position Independent Executable (PIE) to get fixed addresses.
+
+./layout
+# Runs the layout program, printing addresses of text, rodata, data, BSS, heap, and stack regions, plus heap-to-stack gap and filtered /proc/self/maps.
+
+# Section 2: Demand Paging
+gcc -O0 -o demand demand.c
+# Compiles demand.c with no optimizations for debugging.
+
+./demand
+# Runs demand, showing VmSize and VmRSS before/after malloc and touching pages, demonstrating demand paging.
+
+# Section 3: Page Tables
+gcc -O0 -o pagemap pagemap.c
+# Compiles pagemap.c.
+
+sudo ./pagemap
+# Runs pagemap with sudo (for /proc/self/pagemap access), showing present bits and PFNs before/after touching pages.
+
+# Section 4: Copy-on-Write
+gcc -O0 -o cow cow.c
+# Compiles cow.c.
+
+./cow
+# Runs cow, forking a child that reads then writes shared pages, counting page faults for COW.
+
+# Section 5: Shared Libraries
+gcc -o hello_dynamic hello.c
+# Compiles hello.c dynamically (links to shared libc).
+
+gcc -static -o hello_static hello.c
+# Compiles hello.c statically (includes libc in binary).
+
+ls -lh hello_dynamic hello_static
+# Lists sizes of dynamic vs static binaries, showing size difference.
+
+LD_DEBUG=libs ./hello_dynamic 2>&1 | head -30
+# Runs dynamic hello with library loading debug, showing libc search and init.
+
+ldd /bin/bash
+# Lists shared libraries for bash, including libc.
+
+sudo grep 'libc' /proc/*/maps 2>/dev/null | awk -F/ '{print $3}' | sort -un | wc -l
+# Counts processes sharing libc by parsing /proc/*/maps.
+
+cat /proc/self/maps | grep libc
+# Shows libc mappings in current process, with permissions (r--, r-x, etc.).
+
+# Section 6: Under the Hood: How malloc Gets Memory
+gcc -O0 -o alloc_trace alloc_trace.c
+# Compiles alloc_trace.c.
+
+./alloc_trace
+# Runs alloc_trace, showing break changes and addresses for small/large mallocs.
+
+strace -e brk,mmap ./alloc_trace 2>&1 | tail -20
+# Traces brk and mmap syscalls during alloc_trace run.
+
+# Section 7: Fragmentation
+gcc -O0 -o fragment fragment.c
+# Compiles fragment.c.
+
+./fragment
+# Runs fragment, simulating external fragmentation with checkerboard free blocks and internal fragmentation with malloc(1).
+
+# Section 8: Swapping
+swapon --show
+# Shows current swap devices and usage.
+
+gcc -O0 -o swap_pressure swap_pressure.c
+# Compiles swap_pressure.c.
+
+./swap_pressure
+# Runs swap_pressure, allocating 80% of RAM, touching pages, sleeping, then re-reading, showing VmRSS/VmSwap.
+
+# Section 9: Page Replacement
+gcc -O0 -o working_set working_set.c
+# Compiles working_set.c.
+
+./working_set 512 64 5
+# Runs working_set with 64 MB working set, timing scans (fast, in RAM).
+
+./working_set 512 512 5
+# Runs working_set with 512 MB working set, timing scans (slower, with swapping).
+
+grep -E 'Active|Inactive' /proc/meminfo
+# Shows active/inactive page counts from kernel memory info.
+
+# Section 10: Thrashing
+gcc -O0 -o thrash thrash.c
+# Compiles thrash.c.
+
+./thrash
+# Runs thrash, allocating increasing % of RAM with random access, showing throughput drop at thrashing point.
+
+# Cleanup
+rm -f layout layout_pie demand pagemap cow hello_dynamic hello_static alloc_trace fragment swap_pressure working_set thrash *.c
+# Removes all binaries and source files.
